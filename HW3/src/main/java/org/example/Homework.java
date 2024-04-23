@@ -1,6 +1,7 @@
 package org.example;
 
 import java.sql.*;
+import java.util.UUID;
 
 public class Homework {
 
@@ -33,9 +34,9 @@ public class Homework {
             setTable(statement);
             findAllStudents(statement);
             System.out.println();
-            findStudentsByGroup(statement, "developer");
+            findStudentsByGroup(statement, "manager");
             System.out.println();
-            removePersonById(statement, connection, 1);
+            removePersonByName(statement, connection, "Akakiy");
         } catch (SQLException e) {
             System.err.println("Не удалось подключиться к БД: " + e.getMessage());
         }
@@ -44,27 +45,40 @@ public class Homework {
     static void createTable (Statement statement) throws SQLException{
         try {
             statement.execute("""
-                create table Student(
-                    id bigint,
-                    first_name varchar(256),
-                    second_name varchar(256),
+                create table Groups(
+                    id integer not null auto_increment primary key,
                     group_name varchar(128)
                 )
                 """);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
 
-    static void fillTable (Statement statement) throws SQLException{
-        try {
-            int count = statement.executeUpdate("""
-                insert into Student(id, first_name, second_name, group_name) values
-                    (1, 'Anatoliy', 'Ivanov', 'developer'),
-                    (2, 'Akakiy', 'Petrov', 'developer'),
-                    (3, 'Kristina', 'Sidorova', 'manager'),
-                    (4, 'Valentina', 'Alekseeva', 'developer'),
-                    (5, 'Prokofiy', 'Glebov', 'manager')
+            statement.execute("""
+                create table Student(
+                    id uuid default random_uuid() primary key,
+                    first_name varchar(256),
+                    second_name varchar(256),
+                    group_id integer not null references Groups(id)
+                )
+                """);
+    } catch (SQLException e) {
+        throw new RuntimeException(e);
+    }
+}
+
+static void fillTable (Statement statement) throws SQLException{
+    try {
+        statement.executeUpdate("""
+                insert into Groups(group_name) values
+                    ('developer'),
+                    ('manager')
+                """);
+
+        int count = statement.executeUpdate("""
+                insert into Student(first_name, second_name, group_id) values
+                    ('Anatoliy', 'Ivanov', 1),
+                    ('Akakiy', 'Petrov', 1),
+                    ('Kristina', 'Sidorova', 2),
+                    ('Valentina', 'Alekseeva', 1),
+                    ('Prokofiy', 'Glebov', 2)
                 """);
             System.out.println("Колличество вставленных строк: " + count);
         }catch (SQLException e) {
@@ -76,8 +90,8 @@ public class Homework {
         try {
             int count = statement.executeUpdate("""
                 update Student
-                    set group_name = 'developer'
-                    where id > 4
+                    set first_name = 'New_Name'
+                    where first_name = 'Anatoliy'
                 """);
             System.out.println("Количество обновленных строк: " + count);
         }catch (SQLException e) {
@@ -88,13 +102,15 @@ public class Homework {
     static void findAllStudents(Statement statement) throws SQLException{
         try {
             ResultSet resultSet = statement.executeQuery("""
-                select id, first_name, second_name, group_name
-                from Student
+                select s.id, s.first_name, s.second_name, Groups.group_name
+                from Student as s
+                inner join Groups
+                on Groups.id = s.group_id
                 """);
 
 
             while (resultSet.next()) {
-                int id = resultSet.getInt("id");
+                UUID id = (UUID) resultSet.getObject("id");
                 String first_name = resultSet.getString("first_name");
                 String second_name = resultSet.getString("second_name");
                 String group_name = resultSet.getString("group_name");
@@ -108,14 +124,16 @@ public class Homework {
     static void findStudentsByGroup (Statement statement, String group) throws SQLException{
         try {
             ResultSet resultSet = statement.executeQuery(String.format("""
-                select id, first_name, second_name, group_name
-                from Student
+                select s.id, s.first_name, s.second_name, Groups.group_name
+                from Student as s
+                inner join Groups
+                on Groups.id = s.group_id
                 where group_name = '%s'
                 """, group));
 
 
             while (resultSet.next()) {
-                int id = resultSet.getInt("id");
+                UUID id = (UUID) resultSet.getObject("id");
                 String first_name = resultSet.getString("first_name");
                 String second_name = resultSet.getString("second_name");
                 String group_name = resultSet.getString("group_name");
@@ -126,9 +144,9 @@ public class Homework {
         }
     }
 
-    static void removePersonById(Statement statement, Connection connection, int idParameter) throws SQLException {
-        try (PreparedStatement preparedStatement = connection.prepareStatement("delete from Student where id = ?1")) {
-            preparedStatement.setLong(1, idParameter);
+    static void removePersonByName(Statement statement, Connection connection, String name) throws SQLException {
+        try (PreparedStatement preparedStatement = connection.prepareStatement("delete from Student where first_name = ?1")) {
+            preparedStatement.setString(1, name);
             int deletedRowsCount = preparedStatement.executeUpdate();
             System.out.println("Удалено строк: " + deletedRowsCount);
         }
